@@ -15,7 +15,6 @@ from sklearn.tree import DecisionTreeClassifier, ExtraTreeClassifier
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 
 
-
 # %% [markdown]
 # ### IMPOTANDO BASE DE DADOS
 
@@ -147,6 +146,7 @@ plt.savefig("MatrizConfusao.png")
 #opção3 usando plot_confusion_matrix(modelo, teste, previsao)
 
 # %%
+
 mlflow.set_experiment("BestModel")
 with mlflow.start_run():
     #logando métricas
@@ -171,9 +171,101 @@ with mlflow.start_run():
     mlflow.end_run()
 
 # %% [markdown]
-# ##### use mlflow  ui --port 5000
+# #### CRIANDO ESTRTURA EM CLASSE PARA BUSCAR NO XGBOOT UM BOM RESULTADO
 
 # %%
+class ModeloMl:
+    def __init__(self, estimadores, aprendizado, random_state, max_depth):
+        self._n_estimadores = estimadores
+        self._learning_rate = aprendizado
+        self._random_state=random_state
+        #self._subsample = subsample
+        self._max_depth = max_depth
 
+    def procurar(self):
+        mlflow.set_experiment("ProcuraBest")
+        with mlflow.start_run():
+
+            #cirando modelo
+            modelo = GradientBoostingClassifier(n_estimators=self._n_estimadores,
+            learning_rate=self._learning_rate,
+            max_depth=self._max_depth,
+            #subsample=self._subsample,
+            random_state=self._random_state)
+
+            modelo = modelo.fit(X_train, y_train)
+
+            #criando artefatos gráficos
+            previsao = modelo.predict(X_test)
+            mc = confusion_matrix(y_test, previsao)
+            labels_name = ["Dropout", "Enrolled", "Graduated"]
+            matgraph = ConfusionMatrixDisplay(mc, display_labels=labels_name)
+            matgraph.plot()
+            plt.savefig("matgraph.png")
+
+            #salvando parametros
+            mlflow.log_param("n_estimators", self._n_estimadores)
+            mlflow.log_param("learning_rate", self._learning_rate)
+            mlflow.log_param("random_state", self._random_state)
+            #mlflow.log_param("subsample", self._subsample)
+            mlflow.log_param("maxdepth", self._max_depth)
+
+            #fazendo metricas
+            acuracia = accuracy_score(y_test, previsao)
+            #precisoa acuracia e f1 não aceitam binary então precisa mudar para micro, macro,weighted ou sample
+            precisao = precision_score(y_test, previsao, average="macro")
+            recall = recall_score(y_test, previsao, average="macro")
+            f1score = f1_score(y_test, previsao, average="macro")
+            #salvando métricas
+            mlflow.log_metric("acuracia",acuracia)
+            mlflow.log_metric("precisao",precisao)
+            mlflow.log_metric("recall",recall)
+            mlflow.log_metric("f1_score",f1score)
+
+            #salvando gráficos
+            mlflow.log_artifact("matgraph.png")
+            
+            mlflow.sklearn.log_model(modelo, "XGBoost")
+            print("Modelo", mlflow.active_run().info.run_uuid)
+        mlflow.end_run()
+    
+
+
+# %% [markdown]
+# #### ANALISANDO FEATURES IMPORTANTES
+
+# %%
+modelo_extra = ExtraTreeClassifier()
+modelo_extra = modelo_extra.fit(X_train, y_train)
+
+prevendo_extras = modelo_extra.predict(X_test)
+modelo_extra.feature_importances_
+
+
+# %% [markdown]
+# #### VARREDURA DE MELHORES MODELOS COM LAÇO
+
+# %%
+contador =1000
+apr = 0.01
+prf= 10
+for elemento in range(10):
+    mp = ModeloMl(1000,apr,42,prf)
+    mp.procurar()
+    apr+=0.01
+    prf-=1
+
+# %% [markdown]
+# #### MELHOR MODELO ATÉ O MOMENTO
+
+# %%
+mp = ModeloMl(100,0.1,42,5)
+mp.procurar()
+
+# %% [markdown]
+# ##### use mlflow  ui --port 5000
+
+# %% [markdown]
+# DOCUMENTAÇÂO PRECISION: https://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_score.html
 
 
