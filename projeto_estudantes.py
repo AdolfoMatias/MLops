@@ -14,7 +14,7 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier, ExtraTreeClassifier
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 
-#%matplotlib inline
+
 
 # %% [markdown]
 # ### IMPOTANDO BASE DE DADOS
@@ -48,16 +48,17 @@ estudantes.isnull().sum()
 # #### PREPROCESSAMENTO
 
 # %%
-for i in range(37):
-    estudantes = estudantes.rename({estudantes.columns[i]:i}, axis=1)
+# for i in range(37):
+#     estudantes = estudantes.rename({estudantes.columns[i]:i}, axis=1)
 
 
     
 
 # %%
 labele = LabelEncoder()
-for colunas in estudantes.iloc[:,:36].select_dtypes(include="object"):
-    estudantes[colunas] = labele.fit_transform(estudantes.loc[colunas])
+estudantes["Target"] = labele.fit_transform(estudantes["Target"])
+# for colunas in estudantes.iloc[:,:37].select_dtypes(include="object"):
+#     estudantes.loc[colunas] = labele.fit_transform(estudantes.loc[colunas])
 
 # %%
 #Redimensioando com a Padronização
@@ -78,6 +79,12 @@ X_train, X_test, y_train,y_test = train_test_split(previsores, classe, test_size
 # ##### CRIANDO MODELOS
 
 # %%
+n_estimators=500
+learning_rate=0.01
+subsample=1
+max_depth=6
+random_state=42
+
 clf = [ GaussianNB(), 
     DecisionTreeClassifier(random_state=42),  
     RandomForestClassifier(
@@ -85,23 +92,21 @@ clf = [ GaussianNB(),
     min_samples_leaf=25, random_state=42), 
 
     GradientBoostingClassifier(
-    n_estimators=500,
-    learning_rate=0.01,
-    subsample=1,
-    max_depth=6,
-    random_state=42
+    n_estimators=n_estimators,
+    learning_rate=learning_rate,
+    subsample=subsample,
+    max_depth=max_depth,
+    random_state=random_state
 )]
 print(len(clf))
 
 # %%
-
 lista_clf=[]
 for i in range(len(clf)):
     modelo = clf[i]
     modelo = modelo.fit(X_train, y_train)
     lista_clf.append(modelo)
     
-
 
 # %%
 lista_prev =[]
@@ -118,5 +123,57 @@ for item in lista_prev:
     mod = lista_classificadores[contador]
     print(f"{mod}: {round(acuracia,2)}")
     contador+=1
+
+# %%
+#Opção com Saborn
+confusao_matrix = confusion_matrix(y_test, lista_prev[3])
+matriz= sns.heatmap(confusao_matrix, annot=True, cmap="Blues")
+plt.xlabel("Previsto")
+plt.ylabel("Real")
+plt.figure()
+
+plt.show()
+# plt.savefig("confusao.png")
+
+
+# %%
+#Opção 2
+categorias= ["Dropout", "Enrolled", "Graduate"]
+confusao = ConfusionMatrixDisplay(confusao_matrix, display_labels=categorias)
+confusao.plot()
+#Salvando visualização
+plt.savefig("MatrizConfusao.png")
+
+#opção3 usando plot_confusion_matrix(modelo, teste, previsao)
+
+# %%
+mlflow.set_experiment("BestModel")
+with mlflow.start_run():
+    #logando métricas
+    mlflow.log_metric("acuracia", acuracia)
+
+    #logando parametros
+    mlflow.log_param("n_estimators",n_estimators)
+    mlflow.log_param("learning_rate", learning_rate)
+    mlflow.log_param("subsample", subsample)
+    mlflow.log_param("max_depth", max_depth)
+    mlflow.log_param("random_state", random_state)
+
+    #Imagemens
+    mlflow.log_artifact("MatrizConfusao.png")
+   
+
+    #Modelo
+    mlflow.sklearn.log_model(lista_clf[3],"XGBoost")
+    print("Modelo: ",mlflow.active_run().info.run_uuid)
+
+
+    mlflow.end_run()
+
+# %% [markdown]
+# ##### use mlflow  ui --port 5000
+
+# %%
+
 
 
